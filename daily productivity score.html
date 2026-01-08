@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Daily Productivity Score</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+body{
+  font-family:'Segoe UI',sans-serif;
+  background:linear-gradient(135deg,#fbc2eb,#a6c1ee);
+  margin:0;
+}
+.container{
+  max-width:900px;
+  margin:30px auto;
+  padding:20px;
+}
+.card{
+  background:white;
+  padding:20px;
+  border-radius:16px;
+  box-shadow:0 12px 30px rgba(0,0,0,0.15);
+  margin-bottom:20px;
+}
+h2,h3{text-align:center;color:#5a4fcf;}
+input,select,button{
+  width:100%;
+  padding:12px;
+  margin-top:10px;
+  border-radius:8px;
+  border:1px solid #ccc;
+}
+button{
+  background:#5a4fcf;
+  color:white;
+  font-weight:bold;
+  border:none;
+  cursor:pointer;
+}
+.platform{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:10px;
+  border-left:6px solid;
+  border-radius:8px;
+  margin-top:10px;
+  background:#f9f9ff;
+}
+.hidden{display:none}
+
+/* Overlay */
+#overlay{
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,0.7);
+  display:none;
+  align-items:center;
+  justify-content:center;
+  color:white;
+  z-index:999;
+}
+#circle{
+  width:260px;
+  height:260px;
+  border-radius:50%;
+  background:conic-gradient(#4CAF50 0%,#ddd 0%);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:42px;
+  font-weight:bold;
+}
+</style>
+</head>
+
+<body>
+
+<!-- LOGIN (UNCHANGED) -->
+<div class="container" id="loginBox">
+  <div class="card" style="text-align:center;">
+    <h2>Sign in to continue</h2>
+    <div id="g_id_onload"
+      data-client_id="989956083276-43qp99als6jjnchfolumb24lm0dqbtj6.apps.googleusercontent.com"
+      data-callback="onLogin">
+    </div>
+    <div class="g_id_signin"></div>
+  </div>
+</div>
+
+<!-- DASHBOARD (MODIFIED) -->
+<div class="container hidden" id="dashboard">
+
+  <div class="card">
+    <h2>Daily Coding Productivity</h2>
+    <input type="number" id="planned" placeholder="Planned problems">
+    <select id="platform">
+      <option>LeetCode</option>
+      <option>HackerRank</option>
+      <option>CodeChef</option>
+      <option>Codeforces</option>
+      <option>Practice</option>
+    </select>
+    <button onclick="addTask()">Add</button>
+  </div>
+
+  <div class="card">
+    <h3>Today's Progress</h3>
+    <div id="tasks"></div>
+    <h3 id="score">Daily Score: 0%</h3>
+    <button onclick="endDay()">End Day</button>
+  </div>
+
+  <div class="card">
+    <h3>Performance Chart</h3>
+    <canvas id="chart"></canvas>
+  </div>
+
+  <div class="card">
+    <h3>Overall Average</h3>
+    <b id="avg">0%</b>
+  </div>
+
+</div>
+
+<!-- OVERLAY -->
+<div id="overlay" onclick="this.style.display='none'">
+  <div>
+    <div id="circle">0%</div>
+    <div id="history" style="margin-top:20px;"></div>
+  </div>
+</div>
+
+<script>
+let data={
+  LeetCode:{p:0,d:0},
+  HackerRank:{p:0,d:0},
+  CodeChef:{p:0,d:0},
+  Codeforces:{p:0,d:0},
+  Practice:{p:0,d:0}
+};
+let chart;
+
+function onLogin(){
+  loginBox.classList.add("hidden");
+  dashboard.classList.remove("hidden");
+  drawChart();
+  loadAvg();
+}
+
+function addTask(){
+  let p=parseInt(planned.value);
+  let plat=platform.value;
+  if(!p) return;
+  data[plat].p+=p;
+  planned.value="";
+  render();
+}
+
+function render(){
+  tasks.innerHTML="";
+  let totalP=0,totalD=0;
+
+  for(let k in data){
+    if(data[k].p>0){
+      let div=document.createElement("div");
+      div.className="platform";
+      div.style.borderColor="#5a4fcf";
+      div.innerHTML=`<span>${k}: ${data[k].p}</span>`;
+      let inp=document.createElement("input");
+      inp.type="number";
+      inp.value=data[k].d;
+      inp.min=0;
+      inp.max=data[k].p;
+      inp.style.width="70px";
+      inp.oninput=()=>{
+        data[k].d=Math.min(inp.value,data[k].p);
+        update();
+      }
+      div.appendChild(inp);
+      tasks.appendChild(div);
+      totalP+=data[k].p;
+      totalD+=data[k].d;
+    }
+  }
+  update();
+}
+
+function update(){
+  let p=0,d=0;
+  for(let k in data){p+=data[k].p; d+=data[k].d;}
+  let s=p?Math.round(d/p*100):0;
+  score.innerText="Daily Score: "+s+"%";
+  chart.data.datasets[0].data=Object.values(data).map(x=>x.d);
+  chart.update();
+}
+
+function drawChart(){
+  chart=new Chart(chartEl=document.getElementById("chart"),{
+    type:'bar',
+    data:{
+      labels:Object.keys(data),
+      datasets:[{data:Object.values(data).map(x=>x.d),backgroundColor:'#5a4fcf'}]
+    },
+    options:{scales:{y:{beginAtZero:true}}}
+  });
+}
+
+function endDay(){
+  let s=parseInt(score.innerText.match(/\d+/));
+  let h=JSON.parse(localStorage.getItem("scores")||"[]");
+  h.push(s);
+  localStorage.setItem("scores",JSON.stringify(h));
+  showOverlay(s,h);
+  loadAvg();
+  for(let k in data) data[k]={p:0,d:0};
+  render();
+}
+
+function showOverlay(score,history){
+  overlay.style.display="flex";
+  let i=0;
+  let int=setInterval(()=>{
+    if(i>score) return clearInterval(int);
+    circle.style.background=`conic-gradient(#4CAF50 ${i}%,#ddd ${i}%)`;
+    circle.innerText=i+"%";
+    i++;
+  },10);
+
+  historyDiv="";
+  history.slice(0,-1).reverse().forEach((x,i)=>{
+    historyDiv+=`Day ${history.length-i-1}: ${x}%<br>`;
+  });
+  history.innerHTML=historyDiv;
+}
+
+function loadAvg(){
+  let h=JSON.parse(localStorage.getItem("scores")||"[]");
+  if(h.length){
+    avg.innerText=Math.round(h.reduce((a,b)=>a+b)/h.length)+"%";
+  }
+}
+</script>
+
+</body>
+</html>
